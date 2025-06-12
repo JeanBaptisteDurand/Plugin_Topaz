@@ -1,55 +1,71 @@
-import org.eclipse.jface.dialogs.MessageDialog;
-import org.eclipse.ui.handlers.HandlerUtil;
-import org.eclipse.jface.window.Window;
+package myplugin.handlers;
+
+import org.eclipse.core.commands.AbstractHandler;
+import org.eclipse.core.commands.ExecutionEvent;
+import org.eclipse.core.commands.ExecutionException;
+import org.eclipse.swt.SWT;
+import org.eclipse.swt.layout.FillLayout;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Shell;
+import org.eclipse.swt.widgets.Table;
+import org.eclipse.swt.widgets.TableColumn;
+import org.eclipse.swt.widgets.TableItem;
 
-import org.eclipse.rse.core.RSECorePlugin;
-import org.eclipse.rse.core.model.IHost;
-import org.eclipse.rse.core.model.ISystemRegistry;
-import org.eclipse.rse.subsystems.files.core.model.IRemoteFile;
-import org.eclipse.rse.subsystems.files.core.subsystems.IRemoteFileSubSystem;
+import com.compuware.fileaid.utilities.search.mvs.internal.FASearchEngine;
+import com.compuware.fileaid.utilities.search.mvs.internal.FASearchQuery;
+import com.compuware.fileaid.utilities.search.mvs.internal.FASearchResult;
+import com.compuware.fileaid.utilities.search.mvs.internal.FASearchResultCollector;
 
-public class SampleHandler extends org.eclipse.core.commands.AbstractHandler {
+import java.util.List;
+
+public class SampleHandler extends AbstractHandler {
     @Override
-    public Object execute(org.eclipse.core.commands.ExecutionEvent event) throws org.eclipse.core.commands.ExecutionException {
-        Shell shell = HandlerUtil.getActiveShell(event);
+    public Object execute(ExecutionEvent event) throws ExecutionException {
+        Display display = Display.getDefault();
+        Shell shell = new Shell(display);
+        shell.setText("Résultats recherche CALL");
+        shell.setLayout(new FillLayout());
+        shell.setSize(800, 400);
+
+        Table table = new Table(shell, SWT.BORDER | SWT.V_SCROLL | SWT.H_SCROLL);
+        table.setHeaderVisible(true);
+        table.setLinesVisible(true);
+
+        new TableColumn(table, SWT.NONE).setText("Dataset");
+        new TableColumn(table, SWT.NONE).setText("Membre");
+        new TableColumn(table, SWT.NONE).setText("Ligne");
+        new TableColumn(table, SWT.NONE).setText("Contenu");
 
         try {
-            // Récupère tous les hôtes RSE
-            ISystemRegistry registry = RSECorePlugin.getTheSystemRegistry();
-            IHost[] hosts = registry.getHosts();
+            // Étape 1 : Création de la requête
+            FASearchQuery query = new FASearchQuery();
+            query.setSearchText("CALL");  // texte à chercher
+            query.setDatasetName("USER.SUN.DATA.*");  // adapte à ton contexte
 
-            StringBuilder result = new StringBuilder();
+            // Étape 2 : Collecteur de résultats
+            FASearchResultCollector collector = new FASearchResultCollector();
 
-            for (IHost host : hosts) {
-                if (!host.isConnected())
-                    continue;
+            // Étape 3 : Exécution
+            FASearchEngine engine = new FASearchEngine();
+            engine.search(query, collector);
 
-                IRemoteFileSubSystem[] subSystems = registry.getRemoteFileSubSystems(host);
-
-                for (IRemoteFileSubSystem fs : subSystems) {
-                    if (!fs.isConnected())
-                        continue;
-
-                    // Liste les datasets commençant par USER.SUN.DATA
-                    IRemoteFile[] files = fs.list("USER.SUN.DATA*", null);
-
-                    for (IRemoteFile file : files) {
-                        result.append(file.getAbsolutePath()).append("\n");
-                    }
-
-                    break; // une fois qu'on a trouvé un bon subsystem, on stop
-                }
+            // Étape 4 : Ajout des résultats à la table
+            List<FASearchResult> results = collector.getResults();
+            for (FASearchResult result : results) {
+                TableItem item = new TableItem(table, SWT.NONE);
+                item.setText(0, result.getDatasetName());
+                item.setText(1, result.getMemberName());
+                item.setText(2, String.valueOf(result.getLineNumber()));
+                item.setText(3, result.getMatchedLine());
             }
 
-            if (result.length() == 0) {
-                result.append("Aucun dataset trouvé.");
+            // Redimension automatique des colonnes
+            for (TableColumn col : table.getColumns()) {
+                col.pack();
             }
 
-            MessageDialog.openInformation(shell, "Datasets trouvés", result.toString());
-
+            shell.open();
         } catch (Exception e) {
-            MessageDialog.openError(shell, "Erreur RSE", e.getMessage());
             e.printStackTrace();
         }
 
